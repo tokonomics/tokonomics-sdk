@@ -64,7 +64,7 @@ These are finalized decisions. Do not propose alternatives.
 
 > **Update this section when a phase is completed.**
 
-- [ ] **Phase 0: Foundation** — 🟡 IN PROGRESS (2026-06-19)
+- [x] **Phase 0: Foundation** — ✅ COMPLETE (2026-06-19)
   - [x] Monorepo (Turborepo) initialized — typecheck 6/6 ✅
   - [x] apps/web (Next.js 14) created — builds 7 routes, Clerk auth working ✅
   - [x] apps/ingest (Fastify) deployed — https://tokonomics-ingest.fly.dev/ingest/v1/health ✅
