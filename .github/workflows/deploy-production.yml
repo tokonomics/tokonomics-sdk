@@ -1,0 +1,53 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - name: Run DB Migrations
+        env:
+          DIRECT_URL: ${{ secrets.PROD_DIRECT_URL }}
+        run: |
+          yarn install --frozen-lockfile
+          yarn workspace @tokonomics/db prisma migrate deploy
+
+      # Vercel auto-deploys on push to main via GitHub integration
+      # No manual step needed — connected in Vercel dashboard
+
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy Ingest to Fly.io
+        run: fly deploy --config apps/ingest/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Deploy Worker to Fly.io
+        run: fly deploy --config apps/worker/fly.toml --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Notify Slack
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: '{"text":"✅ Tokonomics production deploy complete: ${{ github.sha }}"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DEPLOY_SLACK_WEBHOOK }}
+
+      - name: Report failure
+        if: failure()
+        run: echo "::error::Production deployment failed. Check Fly.io dashboard for ingest/worker status."

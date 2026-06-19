@@ -1,0 +1,22 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: "0 12 */4 * *"  # Every 4 days at noon UTC — within the 7-day pause window
+
+jobs:
+  ping:
+    name: Ping Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase project URL
+        run: |
+          curl -f "${{ secrets.SUPABASE_PROJECT_URL }}/rest/v1/" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            --max-time 10
+          echo "Supabase keep-alive ping successful"
+
+# NOTE: Delete this workflow when upgrading to Supabase Pro.
+# Only needed on the free tier to prevent 7-day inactivity pause.
+# Upgrade trigger: first paying customer.

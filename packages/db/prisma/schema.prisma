@@ -1,0 +1,566 @@
+// packages/db/prisma/schema.prisma
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IDENTITY & AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique @map("clerk_id")
+  email     String   @unique
+  name      String?
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+
+  @@map("users")
+}
+
+model Organization {
+  id         String    @id @default(cuid())
+  clerkOrgId String?   @unique @map("clerk_org_id")
+  name       String
+  slug       String    @unique
+  logoUrl    String?   @map("logo_url")
+  plan       PlanTier  @default(FREE)
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  memberships          Membership[]
+  providerConnections  ProviderConnection[]
+  stripeConnection     StripeConnection?
+  slackConnection      SlackConnection?
+  sdkApiKeys           SdkApiKey[]
+  customers            Customer[]
+  usageEvents          UsageEvent[]
+  budgetRules          BudgetRule[]
+  alerts               Alert[]
+  modelRoutingTests    ModelRoutingTest[]
+  pricingSimulations   PricingSimulation[]
+  subscription         Subscription?
+  marginRules          MarginFloorRule[]
+  weeklyDigestSettings WeeklyDigestSettings?
+
+  @@map("organizations")
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  orgId     String   @map("org_id")
+  role      OrgRole  @default(VIEWER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@map("memberships")
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  GROWTH
+  SCALE
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BILLING
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  orgId                String             @unique @map("org_id")
+  stripeCustomerId     String?            @unique @map("stripe_customer_id")
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id")
+  stripePriceId        String?            @map("stripe_price_id")
+  plan                 PlanTier           @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime?          @map("current_period_start")
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  trialEndsAt          DateTime?          @map("trial_ends_at")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROVIDER CONNECTIONS (LLM API Keys)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ProviderConnection {
+  id            String           @id @default(cuid())
+  orgId         String           @map("org_id")
+  provider      LlmProvider
+  displayName   String           @map("display_name")
+  encryptedKey  String           @map("encrypted_key")
+  keyIv         String           @map("key_iv")
+  keyAuthTag    String           @map("key_auth_tag")
+  keyLastFour   String           @map("key_last_four")
+  status        ConnectionStatus @default(CONNECTED)
+  lastSyncedAt  DateTime?        @map("last_synced_at")
+  lastSyncError String?          @map("last_sync_error")
+  lastSpendUsd  Decimal?         @db.Decimal(12, 6) @map("last_spend_usd")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  org                  Organization          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  providerUsageRecords ProviderUsageRecord[]
+
+  @@unique([orgId, provider, displayName])
+  @@map("provider_connections")
+}
+
+enum LlmProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+}
+
+enum ConnectionStatus {
+  CONNECTED
+  ERROR
+  DISCONNECTED
+}
+
+model ProviderUsageRecord {
+  id           String   @id @default(cuid())
+  connectionId String   @map("connection_id")
+  orgId        String   @map("org_id")
+  date         DateTime @db.Date
+  modelId      String   @map("model_id")
+  inputTokens  BigInt   @map("input_tokens")
+  outputTokens BigInt   @map("output_tokens")
+  totalTokens  BigInt   @map("total_tokens")
+  costUsd      Decimal  @db.Decimal(12, 6) @map("cost_usd")
+  requestCount Int      @map("request_count")
+  rawResponse  Json?    @map("raw_response")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  connection ProviderConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, date, modelId])
+  @@index([orgId, date])
+  @@index([connectionId, date])
+  @@map("provider_usage_records")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SDK API KEYS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SdkApiKey {
+  id         String    @id @default(cuid())
+  orgId      String    @map("org_id")
+  name       String
+  keyHash    String    @unique @map("key_hash")
+  keyPrefix  String    @map("key_prefix")
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("sdk_api_keys")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Customer {
+  id            String    @id @default(cuid())
+  orgId         String    @map("org_id")
+  externalId    String    @map("external_id")
+  displayName   String?   @map("display_name")
+  email         String?
+  manualMrr     Decimal?  @db.Decimal(12, 2) @map("manual_mrr")
+  stripeMatchId String?   @map("stripe_match_id")
+  tags          String[]  @default([])
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  org             Organization             @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  usageEvents     UsageEvent[]
+  dailyAggregates DailyCustomerAggregate[]
+  marginSnapshots CustomerMarginSnapshot[]
+  budgetRules     BudgetRule[]
+  alerts          Alert[]
+
+  @@unique([orgId, externalId])
+  @@index([orgId])
+  @@index([orgId, email])
+  @@map("customers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USAGE EVENTS (High-Volume, Partitioned)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UsageEvent {
+  id                 String      @id @default(cuid())
+  orgId              String      @map("org_id")
+  customerId         String?     @map("customer_id")
+  externalCustomerId String      @map("external_customer_id")
+  feature            String?
+  workflow           String?
+  model              String
+  provider           LlmProvider
+  inputTokens        Int         @map("input_tokens")
+  outputTokens       Int         @map("output_tokens")
+  costUsd            Decimal     @db.Decimal(12, 6) @map("cost_usd")
+  latencyMs          Int?        @map("latency_ms")
+  sdkVersion         String?     @map("sdk_version")
+  idempotencyKey     String?     @unique @map("idempotency_key")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  customer Customer?    @relation(fields: [customerId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([orgId, externalCustomerId, createdAt])
+  @@index([orgId, feature, createdAt])
+  @@map("usage_events")
+}
+
+model DailyCustomerAggregate {
+  id               String   @id @default(cuid())
+  orgId            String   @map("org_id")
+  customerId       String   @map("customer_id")
+  date             DateTime @db.Date
+  totalCostUsd     Decimal  @db.Decimal(12, 6) @map("total_cost_usd")
+  inputTokens      BigInt   @map("input_tokens")
+  outputTokens     BigInt   @map("output_tokens")
+  requestCount     Int      @map("request_count")
+  modelBreakdown   Json     @map("model_breakdown")
+  featureBreakdown Json     @map("feature_breakdown")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, customerId, date])
+  @@index([orgId, date])
+  @@map("daily_customer_aggregates")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STRIPE INTEGRATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model StripeConnection {
+  id              String           @id @default(cuid())
+  orgId           String           @unique @map("org_id")
+  stripeAccountId String           @map("stripe_account_id")
+  encryptedToken  String           @map("encrypted_token")
+  tokenIv         String           @map("token_iv")
+  tokenAuthTag    String           @map("token_auth_tag")
+  scope           String
+  lastSyncedAt    DateTime?        @map("last_synced_at")
+  status          ConnectionStatus @default(CONNECTED)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  org             Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  stripeCustomers StripeCustomer[]
+
+  @@map("stripe_connections")
+}
+
+model StripeCustomer {
+  id                String   @id @default(cuid())
+  connectionId      String   @map("connection_id")
+  orgId             String   @map("org_id")
+  stripeCustomerId  String   @map("stripe_customer_id")
+  email             String?
+  name              String?
+  mrrCents          Int      @map("mrr_cents")
+  planName          String?  @map("plan_name")
+  status            String
+  matchedCustomerId String?  @map("matched_customer_id")
+  lastSyncedAt      DateTime @map("last_synced_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  connection StripeConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, stripeCustomerId])
+  @@index([orgId, email])
+  @@index([orgId, matchedCustomerId])
+  @@map("stripe_customers")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MARGIN
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CustomerMarginSnapshot {
+  id             String       @id @default(cuid())
+  orgId          String       @map("org_id")
+  customerId     String       @map("customer_id")
+  date           DateTime     @db.Date
+  mrrCents       Int          @map("mrr_cents")
+  llmCostUsd     Decimal      @db.Decimal(12, 6) @map("llm_cost_usd")
+  grossMarginPct Decimal      @db.Decimal(7, 4) @map("gross_margin_pct")
+  status         MarginStatus
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, customerId, date])
+  @@index([orgId, date])
+  @@map("customer_margin_snapshots")
+}
+
+enum MarginStatus {
+  HEALTHY
+  WATCH
+  UNPROFITABLE
+  LOSING_MONEY
+}
+
+model OrgMarginScore {
+  id            String   @id @default(cuid())
+  orgId         String   @map("org_id")
+  date          DateTime @db.Date
+  score         Int
+  baseScore     Int      @map("base_score")
+  concentration Int
+  wasteScore    Int      @map("waste_score")
+  pricingFit    Int      @map("pricing_fit")
+  trendBonus    Int      @map("trend_bonus")
+  components    Json
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([orgId, date])
+  @@index([orgId])
+  @@map("org_margin_scores")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALERTS & BUDGET RULES
+// ─────────────────────────────────────────────────────────────────────────────
+
+model BudgetRule {
+  id           String       @id @default(cuid())
+  orgId        String       @map("org_id")
+  customerId   String?      @map("customer_id")
+  feature      String?
+  ruleType     BudgetPeriod @map("rule_type")
+  limitUsd     Decimal      @db.Decimal(12, 6) @map("limit_usd")
+  alertAtPct   Int          @default(80) @map("alert_at_pct")
+  circuitBreak Boolean      @default(false) @map("circuit_break")
+  isActive     Boolean      @default(true) @map("is_active")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer Customer?    @relation(fields: [customerId], references: [id])
+
+  @@index([orgId])
+  @@index([orgId, customerId])
+  @@map("budget_rules")
+}
+
+enum BudgetPeriod {
+  DAILY
+  MONTHLY
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  orgId       String        @map("org_id")
+  customerId  String?       @map("customer_id")
+  alertType   AlertType     @map("alert_type")
+  severity    AlertSeverity
+  title       String
+  body        String        @db.Text
+  metadata    Json          @default("{}")
+  isRead      Boolean       @default(false) @map("is_read")
+  resolvedAt  DateTime?     @map("resolved_at")
+  notifiedVia String[]      @map("notified_via")
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customer Customer?    @relation(fields: [customerId], references: [id])
+
+  @@index([orgId, isRead])
+  @@index([orgId, createdAt])
+  @@map("alerts")
+}
+
+enum AlertType {
+  SPEND_SPIKE
+  BUDGET_THRESHOLD
+  BUDGET_BREACHED
+  MARGIN_FLOOR
+  CUSTOMER_UNPROFITABLE
+  PROVIDER_SYNC_ERROR
+  STRIPE_SYNC_ERROR
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model MarginFloorRule {
+  id        String   @id @default(cuid())
+  orgId     String   @map("org_id")
+  floorPct  Decimal  @db.Decimal(5, 2) @map("floor_pct")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId])
+  @@map("margin_floor_rules")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODEL ROUTING TESTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ModelRoutingTest {
+  id             String     @id @default(cuid())
+  orgId          String     @map("org_id")
+  name           String
+  feature        String?
+  controlModel   String     @map("control_model")
+  treatmentModel String     @map("treatment_model")
+  status         TestStatus @default(DRAFT)
+  startedAt      DateTime?  @map("started_at")
+  endedAt        DateTime?  @map("ended_at")
+  results        Json?
+  recommendation String?    @db.Text
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("model_routing_tests")
+}
+
+enum TestStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  CANCELED
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRICING SIMULATOR
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PricingSimulation {
+  id        String   @id @default(cuid())
+  orgId     String   @map("org_id")
+  name      String
+  config    Json
+  results   Json
+  savedAt   DateTime @default(now()) @map("saved_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("pricing_simulations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS & INTEGRATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model SlackConnection {
+  id             String   @id @default(cuid())
+  orgId          String   @unique @map("org_id")
+  webhookUrl     String   @map("webhook_url")
+  webhookIv      String   @map("webhook_iv")
+  webhookAuthTag String   @map("webhook_auth_tag")
+  channelName    String?  @map("channel_name")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("slack_connections")
+}
+
+model WeeklyDigestSettings {
+  id              String    @id @default(cuid())
+  orgId           String    @unique @map("org_id")
+  isEnabled       Boolean   @default(true) @map("is_enabled")
+  sendEmail       Boolean   @default(true) @map("send_email")
+  sendSlack       Boolean   @default(true) @map("send_slack")
+  recipientEmails String[]  @map("recipient_emails")
+  lastSentAt      DateTime? @map("last_sent_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@map("weekly_digest_settings")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODEL PRICING TABLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ModelPricing {
+  id               String      @id @default(cuid())
+  provider         LlmProvider
+  modelId          String      @map("model_id")
+  modelDisplayName String      @map("model_display_name")
+  inputCostPer1M   Decimal     @db.Decimal(12, 6) @map("input_cost_per_1m")
+  outputCostPer1M  Decimal     @db.Decimal(12, 6) @map("output_cost_per_1m")
+  isActive         Boolean     @default(true) @map("is_active")
+  effectiveFrom    DateTime    @map("effective_from")
+  effectiveTo      DateTime?   @map("effective_to")
+  createdAt        DateTime    @default(now()) @map("created_at")
+
+  @@unique([provider, modelId, effectiveFrom])
+  @@index([provider, modelId, isActive])
+  @@map("model_pricing")
+}

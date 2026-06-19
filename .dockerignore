@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+.turbo
+*.tsbuildinfo
+.git
+coverage
+*.log
+apps/web/.env.local
+apps/ingest/.env
+apps/worker/.env
+.env
