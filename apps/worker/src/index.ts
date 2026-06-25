@@ -1,6 +1,8 @@
 import { createServer } from "http";
-import { Queue } from "bullmq";
+import { Queue, Worker } from "bullmq";
 import pino from "pino";
+import { syncAllProviderConnections } from "./jobs/provider-sync.js";
+import { runAlertCheck } from "./jobs/alert-check.js";
 
 const logger = pino({
   level: process.env["LOG_LEVEL"] ?? "info",
@@ -41,16 +43,57 @@ function parseRedisConnection(): {
 
 const connection = parseRedisConnection();
 
-// Queue definitions — jobs registered incrementally in Phase 1+
 export const queues = {
   providerSync: new Queue("provider-sync", { connection }),
-  calculations: new Queue("calculations", { connection }),
   alerts: new Queue("alerts", { connection }),
+  calculations: new Queue("calculations", { connection }),
   digest: new Queue("digest", { connection }),
   maintenance: new Queue("maintenance", { connection }),
 } as const;
 
-// Health check endpoint (Railway requires it)
+async function bootstrap(): Promise<void> {
+  // ─── Cron: provider sync every 15 min (free) ───────────────────────────────
+  await queues.providerSync.upsertJobScheduler(
+    "provider-sync-cron",
+    { pattern: "*/15 * * * *" },
+    { name: "sync-all", data: {} }
+  );
+
+  // ─── Cron: alert check every 5 min ─────────────────────────────────────────
+  await queues.alerts.upsertJobScheduler(
+    "alert-check-cron",
+    { pattern: "*/5 * * * *" },
+    { name: "check-all", data: {} }
+  );
+
+  logger.info("Cron schedules registered");
+}
+
+bootstrap().catch((err: unknown) => {
+  logger.error({ err }, "Worker bootstrap failed");
+  process.exit(1);
+});
+
+// ─── Workers ──────────────────────────────────────────────────────────────────
+new Worker(
+  "provider-sync",
+  async (job) => {
+    logger.info({ jobId: job.id, name: job.name }, "Running provider sync");
+    await syncAllProviderConnections(logger);
+  },
+  { connection, concurrency: 1 }
+);
+
+new Worker(
+  "alerts",
+  async (job) => {
+    logger.info({ jobId: job.id, name: job.name }, "Running alert check");
+    await runAlertCheck(logger);
+  },
+  { connection, concurrency: 1 }
+);
+
+// ─── Health check HTTP endpoint ───────────────────────────────────────────────
 const PORT = parseInt(process.env["PORT"] ?? "3002", 10);
 
 const healthServer = createServer((_req, res) => {
@@ -64,13 +107,9 @@ healthServer.listen(PORT, () => {
   logger.info({ port: PORT }, "Worker health server listening");
 });
 
-logger.info("Worker bootstrap complete. Waiting for jobs...");
+logger.info("Worker bootstrap complete — provider-sync and alert-check crons registered");
 
-// Phase 1+: Register job processors here
-// import { providerSyncProcessor } from "./jobs/provider-sync.js";
-// new Worker("provider-sync", providerSyncProcessor, { connection, concurrency: 10 });
-
-// Graceful shutdown
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
 const signals = ["SIGINT", "SIGTERM"] as const;
 for (const signal of signals) {
   process.on(signal, async () => {
