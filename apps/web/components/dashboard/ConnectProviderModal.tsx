@@ -51,14 +51,21 @@ export function ConnectProviderModal({ onSuccess, onClose }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
-      const json = (await res.json()) as { error?: { message: string } };
+
+      let json: { error?: { message: string } } = {};
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        json = (await res.json()) as { error?: { message: string } };
+      }
+
       if (!res.ok) {
-        setServerError(json.error?.message ?? "Failed to connect provider");
+        setServerError(json.error?.message ?? `Server error (${res.status}) — check Vercel logs`);
         return;
       }
       onSuccess();
-    } catch {
-      setServerError("Network error — please try again");
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      setServerError(`Request failed: ${msg}`);
     } finally {
       setSubmitting(false);
     }
