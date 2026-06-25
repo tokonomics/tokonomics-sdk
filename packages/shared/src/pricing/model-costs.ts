@@ -1,4 +1,4 @@
-import type { LlmProvider } from "../types/index.js";
+import type { LlmProvider } from "../types/index";
 
 type ModelPricingEntry = {
   inputCostPer1M: string;

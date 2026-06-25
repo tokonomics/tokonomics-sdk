@@ -1,3 +1,3 @@
-export * from "./types/index.js";
-export * from "./encryption.js";
-export * from "./pricing/model-costs.js";
+export * from "./types/index";
+export * from "./encryption";
+export * from "./pricing/model-costs";

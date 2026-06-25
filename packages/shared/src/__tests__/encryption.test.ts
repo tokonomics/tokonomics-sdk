@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { encryptApiKey, decryptApiKey } from "../encryption.js";
+import { encryptApiKey, decryptApiKey } from "../encryption";
 
 beforeAll(() => {
   // 64-char hex key required by AES-256-GCM

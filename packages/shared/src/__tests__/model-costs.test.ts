@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateEventCost, getModelPricing } from "../pricing/model-costs.js";
+import { calculateEventCost, getModelPricing } from "../pricing/model-costs";
 
 describe("calculateEventCost", () => {
   it("calculates GPT-4o cost correctly", () => {
