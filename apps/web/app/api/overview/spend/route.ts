@@ -1,7 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@tokonomics/db";
 import { ok, unauthorized } from "@/lib/api-response";
 import { redis, CacheKeys, CacheTTL } from "@/lib/redis";
+import { getAuthContext } from "@/lib/auth";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const VALID_PERIODS = ["7d", "30d", "90d"] as const;
@@ -12,14 +12,8 @@ function periodDays(period: Period): number {
 }
 
 export async function GET(req: Request): Promise<Response> {
-  const { userId, orgId } = auth();
-  if (!userId || !orgId) return unauthorized();
-
-  const org = await prisma.organization.findFirst({
-    where: { clerkOrgId: orgId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!org) return unauthorized();
+  const ctx = await getAuthContext();
+  if (!ctx) return unauthorized();
 
   const url = new URL(req.url);
   const periodParam = url.searchParams.get("period") ?? "30d";
@@ -27,7 +21,7 @@ export async function GET(req: Request): Promise<Response> {
     ? (periodParam as Period)
     : "30d";
 
-  const cacheKey = CacheKeys.orgSpend(org.id, period);
+  const cacheKey = CacheKeys.orgSpend(ctx.orgId, period);
   const cached = await redis.get(cacheKey);
   if (cached) return ok(cached);
 
@@ -38,7 +32,7 @@ export async function GET(req: Request): Promise<Response> {
 
   const records = await prisma.providerUsageRecord.findMany({
     where: {
-      orgId: org.id,
+      orgId: ctx.orgId,
       date: { gte: periodStart },
     },
     select: {

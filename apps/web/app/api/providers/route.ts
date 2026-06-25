@@ -1,23 +1,17 @@
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@tokonomics/db";
 import { encryptApiKey } from "@tokonomics/shared";
 import { ZodError } from "zod";
 import { ok, err, fromZodError, unauthorized } from "@/lib/api-response";
 import { createProviderSchema } from "@/lib/validators/providers";
 import { validateProviderKey } from "@/lib/providers/validate-key";
+import { getAuthContext } from "@/lib/auth";
 
 export async function GET(): Promise<Response> {
-  const { userId, orgId } = auth();
-  if (!userId || !orgId) return unauthorized();
-
-  const org = await prisma.organization.findFirst({
-    where: { clerkOrgId: orgId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!org) return unauthorized();
+  const ctx = await getAuthContext();
+  if (!ctx) return unauthorized();
 
   const connections = await prisma.providerConnection.findMany({
-    where: { orgId: org.id },
+    where: { orgId: ctx.orgId },
     select: {
       id: true,
       provider: true,
@@ -40,14 +34,8 @@ export async function GET(): Promise<Response> {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const { userId, orgId } = auth();
-  if (!userId || !orgId) return unauthorized();
-
-  const org = await prisma.organization.findFirst({
-    where: { clerkOrgId: orgId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!org) return unauthorized();
+  const ctx = await getAuthContext();
+  if (!ctx) return unauthorized();
 
   let body: unknown;
   try {
@@ -64,15 +52,13 @@ export async function POST(req: Request): Promise<Response> {
     throw e;
   }
 
-  // Validate API key against the provider before storing anything
   const validation = await validateProviderKey(input.provider, input.apiKey);
   if (!validation.valid) {
     return err("VALIDATION_ERROR", `API key validation failed: ${validation.message}`);
   }
 
-  // Check for duplicate displayName per org+provider
   const existing = await prisma.providerConnection.findFirst({
-    where: { orgId: org.id, provider: input.provider, displayName: input.displayName },
+    where: { orgId: ctx.orgId, provider: input.provider, displayName: input.displayName },
   });
   if (existing) {
     return err("CONFLICT", `A connection named "${input.displayName}" already exists`, 409);
@@ -82,7 +68,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const connection = await prisma.providerConnection.create({
     data: {
-      orgId: org.id,
+      orgId: ctx.orgId,
       provider: input.provider,
       displayName: input.displayName,
       encryptedKey: encrypted.encryptedValue,

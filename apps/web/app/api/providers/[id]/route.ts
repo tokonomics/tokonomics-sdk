@@ -1,21 +1,15 @@
-import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@tokonomics/db";
 import { ok, unauthorized, notFound } from "@/lib/api-response";
+import { getAuthContext } from "@/lib/auth";
 
 type Params = { params: { id: string } };
 
 export async function DELETE(_req: Request, { params }: Params): Promise<Response> {
-  const { userId, orgId } = auth();
-  if (!userId || !orgId) return unauthorized();
-
-  const org = await prisma.organization.findFirst({
-    where: { clerkOrgId: orgId, deletedAt: null },
-    select: { id: true },
-  });
-  if (!org) return unauthorized();
+  const ctx = await getAuthContext();
+  if (!ctx) return unauthorized();
 
   const connection = await prisma.providerConnection.findFirst({
-    where: { id: params.id, orgId: org.id },
+    where: { id: params.id, orgId: ctx.orgId },
   });
   if (!connection) return notFound("Provider connection");
 
