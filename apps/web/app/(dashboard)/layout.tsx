@@ -9,6 +9,7 @@ import {
   Bell,
   Settings,
   Zap,
+  Key,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -16,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/margin", label: "Margin", icon: TrendingUp },
   { href: "/alerts", label: "Alerts", icon: Bell },
+  { href: "/settings/sdk-keys", label: "SDK Keys", icon: Key },
   { href: "/settings/providers", label: "Settings", icon: Settings },
 ] as const;
 

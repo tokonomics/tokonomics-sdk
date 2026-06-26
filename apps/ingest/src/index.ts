@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { healthRoutes } from "./routes/health.js";
+import { eventRoutes } from "./routes/events.js";
 
 const PORT = parseInt(process.env["PORT"] ?? "3001", 10);
 const HOST = process.env["HOST"] ?? "0.0.0.0";
@@ -30,9 +31,7 @@ async function bootstrap(): Promise<void> {
   });
 
   await fastify.register(healthRoutes);
-
-  // Phase 2+: register event routes here
-  // await fastify.register(eventRoutes);
+  await fastify.register(eventRoutes);
 
   await fastify.listen({ port: PORT, host: HOST });
 }
