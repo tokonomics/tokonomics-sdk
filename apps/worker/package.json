@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsup src/index.ts --format cjs --external @prisma/client --external ioredis --no-splitting --clean",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --passWithNoTests",
@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
+    "tsup": "^8.0.0",
     "tsx": "^4.11.0",
     "typescript": "^5.4.5",
     "vitest": "^1.6.0"
