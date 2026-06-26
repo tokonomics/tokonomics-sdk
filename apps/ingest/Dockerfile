@@ -6,6 +6,7 @@ FROM base AS deps
 COPY package.json yarn.lock ./
 COPY apps/ingest/package.json ./apps/ingest/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
 RUN yarn install --frozen-lockfile --production=false
 
 # Build
