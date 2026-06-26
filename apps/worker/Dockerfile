@@ -11,6 +11,7 @@ RUN yarn install --frozen-lockfile --production=false
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN yarn workspace @tokonomics/db prisma generate
 RUN yarn workspace @tokonomics/worker build
 
 FROM base AS runner
