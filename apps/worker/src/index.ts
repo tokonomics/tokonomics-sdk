@@ -3,6 +3,7 @@ import { Queue, Worker } from "bullmq";
 import pino from "pino";
 import { syncAllProviderConnections } from "./jobs/provider-sync.js";
 import { runAlertCheck } from "./jobs/alert-check.js";
+import { aggregateDirtyCustomers } from "./jobs/aggregate-customers.js";
 
 const logger = pino({
   level: process.env["LOG_LEVEL"] ?? "info",
@@ -66,6 +67,13 @@ async function bootstrap(): Promise<void> {
     { name: "check-all", data: {} }
   );
 
+  // ─── Cron: aggregate dirty customers every 30 seconds ──────────────────────
+  await queues.calculations.upsertJobScheduler(
+    "aggregate-customers-cron",
+    { every: 30000 },
+    { name: "aggregate-dirty", data: {} }
+  );
+
   logger.info("Cron schedules registered");
 }
 
@@ -89,6 +97,15 @@ new Worker(
   async (job) => {
     logger.info({ jobId: job.id, name: job.name }, "Running alert check");
     await runAlertCheck(logger);
+  },
+  { connection, concurrency: 1 }
+);
+
+new Worker(
+  "calculations",
+  async (job) => {
+    logger.info({ jobId: job.id, name: job.name }, "Running customer aggregation");
+    await aggregateDirtyCustomers(logger);
   },
   { connection, concurrency: 1 }
 );

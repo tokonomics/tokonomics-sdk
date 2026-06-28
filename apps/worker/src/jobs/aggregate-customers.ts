@@ -1,25 +1,19 @@
 import { prisma } from "@tokonomics/db";
-import { Redis } from "ioredis";
+import { Redis } from "@upstash/redis";
 import type { Logger } from "pino";
 
-// For the worker, we use native Redis (ioredis) since BullMQ already uses it
-function getWorkerRedis(): Redis {
-  const url =
-    process.env["UPSTASH_REDIS_URL"] ??
-    process.env["REDIS_URL"] ??
-    "redis://localhost:6379";
-  return new Redis(url, { maxRetriesPerRequest: null, enableReadyCheck: false, tls: url.startsWith("rediss:") ? {} : undefined });
+function getRedis(): Redis {
+  const url = process.env["UPSTASH_REDIS_REST_URL"];
+  const token = process.env["UPSTASH_REDIS_REST_TOKEN"];
+  if (!url || !token) {
+    throw new Error("UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set");
+  }
+  return new Redis({ url, token });
 }
 
 export async function aggregateDirtyCustomers(logger: Logger): Promise<void> {
-  // We use @upstash/redis REST for reading dirty sets to avoid importing ioredis
-  const { Redis: UpstashRedis } = await import("@upstash/redis");
-  const redis = new UpstashRedis({
-    url: process.env["UPSTASH_REDIS_REST_URL"]!,
-    token: process.env["UPSTASH_REDIS_REST_TOKEN"]!,
-  });
+  const redis = getRedis();
 
-  // Find all orgs that have dirty customers
   const keys = await redis.keys("dirty_customers:*");
   if (keys.length === 0) return;
 
@@ -27,41 +21,29 @@ export async function aggregateDirtyCustomers(logger: Logger): Promise<void> {
 
   for (const key of keys) {
     const orgId = (key as string).replace("dirty_customers:", "");
-    const customerIds = await redis.smembers(key as string) as string[];
+    const customerIds = (await redis.smembers(key as string)) as string[];
     if (customerIds.length === 0) continue;
 
     for (const customerId of customerIds) {
       try {
-        await aggregateCustomer(orgId, customerId);
+        await aggregateCustomer(orgId, customerId, logger);
       } catch (err: unknown) {
         logger.error({ orgId, customerId, err }, "Failed to aggregate customer");
       }
     }
 
-    // Clear the dirty set after processing
     await redis.del(key as string);
-    logger.info({ orgId, count: customerIds.length }, "Aggregated customers");
+    logger.info({ orgId, count: customerIds.length }, "Aggregated customers for org");
   }
 }
 
-async function aggregateCustomer(orgId: string, customerId: string): Promise<void> {
+async function aggregateCustomer(orgId: string, customerId: string, logger: Logger): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // Sum today's events for this customer
   const events = await prisma.usageEvent.findMany({
-    where: {
-      orgId,
-      customerId,
-      createdAt: { gte: today },
-    },
-    select: {
-      costUsd: true,
-      inputTokens: true,
-      outputTokens: true,
-      model: true,
-      feature: true,
-    },
+    where: { orgId, customerId, createdAt: { gte: today } },
+    select: { costUsd: true, inputTokens: true, outputTokens: true, model: true, feature: true },
   });
 
   if (events.length === 0) return;
@@ -78,10 +60,9 @@ async function aggregateCustomer(orgId: string, customerId: string): Promise<voi
     totalInput += BigInt(e.inputTokens);
     totalOutput += BigInt(e.outputTokens);
 
-    const model = e.model;
-    modelBreakdown[model] ??= { cost: 0, calls: 0 };
-    modelBreakdown[model]!.cost += cost;
-    modelBreakdown[model]!.calls += 1;
+    modelBreakdown[e.model] ??= { cost: 0, calls: 0 };
+    modelBreakdown[e.model]!.cost += cost;
+    modelBreakdown[e.model]!.calls += 1;
 
     if (e.feature) {
       featureBreakdown[e.feature] ??= { cost: 0, calls: 0 };
@@ -112,9 +93,10 @@ async function aggregateCustomer(orgId: string, customerId: string): Promise<voi
       featureBreakdown,
     },
   });
+
+  logger.info({ orgId, customerId, totalCost }, "Customer aggregated");
 }
 
-// Daily full rebuild — catches any missed aggregations
 export async function rebuildAllAggregates(logger: Logger): Promise<void> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -129,7 +111,7 @@ export async function rebuildAllAggregates(logger: Logger): Promise<void> {
 
   for (const customer of customers) {
     try {
-      await aggregateCustomer(customer.orgId, customer.id);
+      await aggregateCustomer(customer.orgId, customer.id, logger);
     } catch (err: unknown) {
       logger.error({ customerId: customer.id, err }, "Rebuild aggregate failed");
     }
