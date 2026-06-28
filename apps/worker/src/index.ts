@@ -69,7 +69,7 @@ aggregateDirtyCustomers(logger).catch((err: unknown) => {
   logger.error({ err }, "Startup aggregation error");
 });
 
-logger.info("Worker started — aggregation every 30s, provider-sync every 15m, alerts every 5m");
+logger.info("Worker started — aggregation:30s | alerts:5m | sync:15m | margin:15m | digest:1h");
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 const signals = ["SIGINT", "SIGTERM"] as const;
