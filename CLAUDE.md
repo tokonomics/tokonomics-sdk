@@ -65,21 +65,24 @@ These are finalized decisions. Do not propose alternatives.
 > **Update this section when a phase is completed.**
 
 - [x] **Phase 0: Foundation** — ✅ COMPLETE (2026-06-19)
-  - [x] Monorepo (Turborepo) initialized — typecheck 6/6 ✅
-  - [x] apps/web (Next.js 14) created — builds 7 routes, Clerk auth working ✅
-  - [x] apps/ingest (Fastify) deployed — https://tokonomics-ingest.fly.dev/ingest/v1/health ✅
-  - [x] apps/worker (BullMQ) deployed — https://tokonomics-worker.fly.dev/health ✅
-  - [x] packages/db (Prisma schema) created — all 22 tables live in Supabase ✅
-  - [x] packages/shared (encryption, types) created ✅
-  - [x] Clerk auth configured — sign-in/sign-up working locally ✅
-  - [x] Supabase DB schema migrated — 22 tables + 12 model pricing rows ✅
-  - [x] Fly.io apps created + secrets set + ingest deployed ✅
-  - [ ] Upstash Redis — create free DB, fill UPSTASH_REDIS_URL + REST keys in .env files
-  - [ ] GitHub repo created and code pushed
-  - [ ] Vercel Pro connected to apps/web + env vars added
-  - [ ] Dashboard shell renders at app.tokonomics.dev
-- [ ] Phase 1: Free Tier
-- [ ] Phase 2: Starter Tier
+- [x] **Phase 1: Free Tier** — ✅ COMPLETE (2026-06-19)
+  - [x] Encryption module (AES-256-GCM) — 9 unit tests ✅
+  - [x] Model pricing / cost calculation — 11 unit tests ✅
+  - [x] Provider Connection API (GET/POST/DELETE) — validates key before saving ✅
+  - [x] Provider Sync Worker (OpenAI + Anthropic usage API) — 15 min cron ✅
+  - [x] Spend Overview API + dashboard UI — bar chart, donut, period picker ✅
+  - [x] Spend spike alert job — 2× 7-day average detection ✅
+  - [x] app.tokonomics.dev live — Vercel Pro ✅
+- [x] **Phase 2: Starter Tier** — ✅ COMPLETE (2026-06-28)
+  - [x] SDK key generation (bcrypt, 9 unit tests) — GET/POST/DELETE /api/sdk-keys ✅
+  - [x] Ingest service — POST /ingest/v1/events live at ingest.tokonomics.dev ✅
+  - [x] Customer aggregation worker job (dirty-set pattern) ✅
+  - [x] Customer dashboard — /customers with sort, search, CSV export ✅
+  - [x] No-code Prompt Assist — copy-paste prompt in SDK Keys page ✅
+  - [x] Docker fixes: tsup bundling, prisma generate, OpenSSL 3.x binary ✅
+  - [x] Billing deferred → Lemon Squeezy (2.1 skipped, org set to STARTER in DB)
+- [ ] Phase 3: Growth Tier
+- [ ] Phase 4: Scale Tier
 - [ ] Phase 3: Growth Tier
 - [ ] Phase 4: Scale Tier
 - [ ] Phase 5: Hardening & Launch
