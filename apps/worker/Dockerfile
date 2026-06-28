@@ -16,6 +16,7 @@ RUN yarn workspace @tokonomics/worker build
 
 FROM base AS runner
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 COPY --from=builder /app/apps/worker/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 

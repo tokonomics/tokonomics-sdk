@@ -19,6 +19,7 @@ RUN yarn workspace @tokonomics/ingest build
 # Production image
 FROM base AS runner
 ENV NODE_ENV=production
+RUN apk add --no-cache openssl
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 fastify
 COPY --from=builder /app/apps/ingest/dist ./dist
