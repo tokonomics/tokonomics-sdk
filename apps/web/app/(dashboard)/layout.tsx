@@ -10,12 +10,16 @@ import {
   Settings,
   Zap,
   Key,
+  Calculator,
+  GitBranch,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/overview", label: "Overview", icon: BarChart3 },
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/margin", label: "Margin", icon: TrendingUp },
+  { href: "/simulator", label: "Simulator", icon: Calculator },
+  { href: "/routing", label: "Routing", icon: GitBranch },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/settings/sdk-keys", label: "SDK Keys", icon: Key },
   { href: "/settings/providers", label: "Settings", icon: Settings },

@@ -3,6 +3,8 @@ import pino from "pino";
 import { syncAllProviderConnections } from "./jobs/provider-sync.js";
 import { runAlertCheck } from "./jobs/alert-check.js";
 import { aggregateDirtyCustomers } from "./jobs/aggregate-customers.js";
+import { runMarginCalculation } from "./jobs/margin-calculate.js";
+import { generateWeeklyDigests } from "./jobs/digest-generate.js";
 
 const logger = pino({
   level: process.env["LOG_LEVEL"] ?? "info",
@@ -47,6 +49,20 @@ setInterval(() => {
     logger.error({ err }, "Alert check error");
   });
 }, 5 * 60 * 1_000);
+
+// Calculate margin scores every 15 minutes (after aggregation)
+setInterval(() => {
+  runMarginCalculation(logger).catch((err: unknown) => {
+    logger.error({ err }, "Margin calculation error");
+  });
+}, 15 * 60 * 1_000);
+
+// Weekly digest check — runs every hour, fires on Monday 7am UTC
+setInterval(() => {
+  generateWeeklyDigests(logger).catch((err: unknown) => {
+    logger.error({ err }, "Weekly digest error");
+  });
+}, 60 * 60 * 1_000);
 
 // Run aggregation immediately on startup to catch anything queued while offline
 aggregateDirtyCustomers(logger).catch((err: unknown) => {
