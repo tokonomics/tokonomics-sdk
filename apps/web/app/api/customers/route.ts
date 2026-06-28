@@ -73,7 +73,7 @@ export async function GET(req: Request): Promise<Response> {
           externalId: customer.externalId,
           displayName: customer.displayName,
           email: customer.email,
-          totalCostUsd: totalCost.toFixed(2),
+          totalCostUsd: totalCost.toFixed(6),
           requestCount: a._sum.requestCount ?? 0,
         };
       });
