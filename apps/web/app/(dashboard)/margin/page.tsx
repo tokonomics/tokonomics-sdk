@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { MarginCopilot } from "@/components/dashboard/MarginCopilot";
 
 type CustomerMargin = {
   id: string; externalId: string; displayName: string | null;
@@ -187,6 +188,9 @@ export default function MarginPage() {
           </table>
         )}
       </div>
+
+      {/* 4.4 Margin Copilot */}
+      <MarginCopilot />
     </div>
   );
 }

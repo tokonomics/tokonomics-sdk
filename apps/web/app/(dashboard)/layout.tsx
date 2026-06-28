@@ -12,6 +12,8 @@ import {
   Key,
   Calculator,
   GitBranch,
+  FileText,
+  Users2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -20,8 +22,11 @@ const NAV_ITEMS = [
   { href: "/margin", label: "Margin", icon: TrendingUp },
   { href: "/simulator", label: "Simulator", icon: Calculator },
   { href: "/routing", label: "Routing", icon: GitBranch },
+  { href: "/reports", label: "Reports", icon: FileText },
   { href: "/alerts", label: "Alerts", icon: Bell },
   { href: "/settings/sdk-keys", label: "SDK Keys", icon: Key },
+  { href: "/settings/team", label: "Team", icon: Users2 },
+  { href: "/settings/api-keys", label: "API Keys", icon: Key },
   { href: "/settings/providers", label: "Settings", icon: Settings },
 ] as const;
 

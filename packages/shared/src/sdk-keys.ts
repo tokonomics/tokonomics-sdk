@@ -15,6 +15,15 @@ export function generateSdkKey(): GeneratedSdkKey {
   return { fullKey, prefix, hash };
 }
 
+// Org-level public API key (tok_api_ prefix — separate from SDK keys)
+export function generateOrgApiKey(): GeneratedSdkKey {
+  const random = randomBytes(32).toString("base64url");
+  const fullKey = `tok_api_${random}`;
+  const prefix = fullKey.slice(0, 11); // "tok_api_XXX"
+  const hash = bcrypt.hashSync(fullKey, 10);
+  return { fullKey, prefix, hash };
+}
+
 export async function verifySdkKey(inputKey: string, storedHash: string): Promise<boolean> {
   if (!inputKey) return false;
   try {
