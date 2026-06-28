@@ -16,7 +16,6 @@
     "@tokonomics/db": "*",
     "@tokonomics/shared": "*",
     "@upstash/redis": "^1.31.6",
-    "bullmq": "^5.10.0",
     "pino": "^9.2.0"
   },
   "devDependencies": {

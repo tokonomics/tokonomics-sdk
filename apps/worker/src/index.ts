@@ -1,5 +1,4 @@
 import { createServer } from "http";
-import { Queue, Worker } from "bullmq";
 import pino from "pino";
 import { syncAllProviderConnections } from "./jobs/provider-sync.js";
 import { runAlertCheck } from "./jobs/alert-check.js";
@@ -11,104 +10,6 @@ const logger = pino({
     ? { transport: { target: "pino-pretty", options: { colorize: true } } }
     : {}),
 });
-
-function parseRedisConnection(): {
-  host: string;
-  port: number;
-  password?: string;
-  tls?: Record<string, never>;
-  maxRetriesPerRequest: null;
-  enableReadyCheck: boolean;
-} {
-  const url =
-    process.env["UPSTASH_REDIS_URL"] ??
-    process.env["REDIS_URL"] ??
-    "redis://localhost:6379";
-
-  try {
-    const parsed = new URL(url);
-    const isSecure = parsed.protocol === "rediss:";
-    return {
-      host: parsed.hostname,
-      port: parseInt(parsed.port || (isSecure ? "6380" : "6379"), 10),
-      ...(parsed.password ? { password: parsed.password } : {}),
-      ...(isSecure ? { tls: {} } : {}),
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    };
-  } catch {
-    logger.warn("Invalid Redis URL, falling back to localhost");
-    return { host: "localhost", port: 6379, maxRetriesPerRequest: null, enableReadyCheck: false };
-  }
-}
-
-const connection = parseRedisConnection();
-
-export const queues = {
-  providerSync: new Queue("provider-sync", { connection }),
-  alerts: new Queue("alerts", { connection }),
-  calculations: new Queue("calculations", { connection }),
-  digest: new Queue("digest", { connection }),
-  maintenance: new Queue("maintenance", { connection }),
-} as const;
-
-async function bootstrap(): Promise<void> {
-  // ─── Cron: provider sync every 15 min (free) ───────────────────────────────
-  await queues.providerSync.upsertJobScheduler(
-    "provider-sync-cron",
-    { pattern: "*/15 * * * *" },
-    { name: "sync-all", data: {} }
-  );
-
-  // ─── Cron: alert check every 5 min ─────────────────────────────────────────
-  await queues.alerts.upsertJobScheduler(
-    "alert-check-cron",
-    { pattern: "*/5 * * * *" },
-    { name: "check-all", data: {} }
-  );
-
-  // ─── Cron: aggregate dirty customers every 30 seconds ──────────────────────
-  await queues.calculations.upsertJobScheduler(
-    "aggregate-customers-cron",
-    { every: 30000 },
-    { name: "aggregate-dirty", data: {} }
-  );
-
-  logger.info("Cron schedules registered");
-}
-
-bootstrap().catch((err: unknown) => {
-  logger.error({ err }, "Worker bootstrap failed");
-  process.exit(1);
-});
-
-// ─── Workers ──────────────────────────────────────────────────────────────────
-new Worker(
-  "provider-sync",
-  async (job) => {
-    logger.info({ jobId: job.id, name: job.name }, "Running provider sync");
-    await syncAllProviderConnections(logger);
-  },
-  { connection, concurrency: 1 }
-);
-
-new Worker(
-  "alerts",
-  async (job) => {
-    logger.info({ jobId: job.id, name: job.name }, "Running alert check");
-    await runAlertCheck(logger);
-  },
-  { connection, concurrency: 1 }
-);
-
-new Worker(
-  "calculations",
-  async (job) => {
-    logger.info({ jobId: job.id, name: job.name }, "Running customer aggregation");
-    await aggregateDirtyCustomers(logger);
-  },
-  { connection, concurrency: 1 }
-);
 
 // ─── Health check HTTP endpoint ───────────────────────────────────────────────
 const PORT = parseInt(process.env["PORT"] ?? "3002", 10);
@@ -124,16 +25,41 @@ healthServer.listen(PORT, () => {
   logger.info({ port: PORT }, "Worker health server listening");
 });
 
-logger.info("Worker bootstrap complete — provider-sync and alert-check crons registered");
+// ─── Periodic jobs via setInterval (no native Redis needed) ───────────────────
+
+// Aggregate dirty customers every 30 seconds
+setInterval(() => {
+  aggregateDirtyCustomers(logger).catch((err: unknown) => {
+    logger.error({ err }, "Customer aggregation error");
+  });
+}, 30_000);
+
+// Sync provider connections every 15 minutes
+setInterval(() => {
+  syncAllProviderConnections(logger).catch((err: unknown) => {
+    logger.error({ err }, "Provider sync error");
+  });
+}, 15 * 60 * 1_000);
+
+// Check spend spike alerts every 5 minutes
+setInterval(() => {
+  runAlertCheck(logger).catch((err: unknown) => {
+    logger.error({ err }, "Alert check error");
+  });
+}, 5 * 60 * 1_000);
+
+// Run aggregation immediately on startup to catch anything queued while offline
+aggregateDirtyCustomers(logger).catch((err: unknown) => {
+  logger.error({ err }, "Startup aggregation error");
+});
+
+logger.info("Worker started — aggregation every 30s, provider-sync every 15m, alerts every 5m");
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 const signals = ["SIGINT", "SIGTERM"] as const;
 for (const signal of signals) {
-  process.on(signal, async () => {
+  process.on(signal, () => {
     logger.info({ signal }, "Shutting down worker");
-    for (const queue of Object.values(queues)) {
-      await queue.close();
-    }
     healthServer.close();
     process.exit(0);
   });
