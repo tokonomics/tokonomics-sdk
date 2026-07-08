@@ -59,7 +59,7 @@ export default function ReportsPage() {
       {!report ? (
         <div className="flex h-96 flex-col items-center justify-center rounded-xl border border-dashed text-center">
           <p className="text-lg font-semibold">No report yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">Select a period and click "Generate preview" to see your investor report.</p>
+          <p className="mt-2 text-sm text-muted-foreground">Select a period and click &quot;Generate preview&quot; to see your investor report.</p>
         </div>
       ) : (
         <div className="rounded-xl border bg-white p-8 shadow-sm print:shadow-none print:border-0">

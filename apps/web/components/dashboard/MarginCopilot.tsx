@@ -80,7 +80,7 @@ export function MarginCopilot() {
 
       {!result && !loading && !error && (
         <div className="rounded-lg border border-dashed border-brand-200 p-6 text-center text-sm text-brand-600">
-          Click "Get recommendations" to analyze your margin data and receive 3 specific, actionable improvements.
+          Click &quot;Get recommendations&quot; to analyze your margin data and receive 3 specific, actionable improvements.
           Uses your connected Anthropic API key.
         </div>
       )}
