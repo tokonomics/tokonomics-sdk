@@ -1,8 +1,15 @@
+import * as Sentry from "@sentry/node";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { healthRoutes } from "./routes/health.js";
 import { eventRoutes } from "./routes/events.js";
+
+Sentry.init({
+  dsn: process.env["SENTRY_DSN"],
+  tracesSampleRate: 0.1,
+  enabled: process.env["NODE_ENV"] === "production",
+});
 
 const PORT = parseInt(process.env["PORT"] ?? "3001", 10);
 const HOST = process.env["HOST"] ?? "0.0.0.0";
@@ -37,6 +44,7 @@ async function bootstrap(): Promise<void> {
 }
 
 bootstrap().catch((err: unknown) => {
+  Sentry.captureException(err);
   fastify.log.error(err);
   process.exit(1);
 });

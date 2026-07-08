@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SignInButton, SignUpButton, SignedIn, SignedOut } from "@clerk/nextjs";
 
 export default function LandingPage(): React.JSX.Element {
@@ -45,6 +46,11 @@ export default function LandingPage(): React.JSX.Element {
           No credit card required · Free tier available · 5-minute setup
         </p>
       </div>
+
+      <footer className="absolute bottom-6 flex gap-6 text-xs text-brand-500">
+        <Link href="/privacy" className="hover:text-brand-300">Privacy Policy</Link>
+        <Link href="/terms" className="hover:text-brand-300">Terms of Service</Link>
+      </footer>
     </main>
   );
 }

@@ -2,6 +2,7 @@ import { prisma } from "@tokonomics/db";
 import { z, ZodError } from "zod";
 import { ok, err, fromZodError, unauthorized, notFound } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth";
+import { getRedis, CacheKeys } from "@/lib/redis";
 
 type Params = { params: { id: string } };
 
@@ -84,6 +85,12 @@ export async function PATCH(req: Request, { params }: Params): Promise<Response>
       },
       select: { id: true, externalId: true, displayName: true, email: true, manualMrr: true },
     });
+
+    // Invalidate margin + customer list caches so next load reflects new MRR
+    await Promise.all([
+      getRedis().del(`margin:org:${ctx.orgId}`),
+      getRedis().del(CacheKeys.customers(ctx.orgId)),
+    ]).catch(() => {}); // non-fatal
 
     return ok({ ...updated, manualMrr: updated.manualMrr?.toString() ?? null });
   } catch (e: unknown) {

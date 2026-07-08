@@ -1,10 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { TotalSpendCard } from "@/components/dashboard/TotalSpendCard";
-import { SpendChart } from "@/components/charts/SpendChart";
-import { ModelMixChart } from "@/components/charts/ModelMixChart";
 import { ProviderList } from "@/components/dashboard/ProviderList";
+
+const SpendChart = dynamic(
+  () => import("@/components/charts/SpendChart").then((m) => ({ default: m.SpendChart })),
+  { ssr: false, loading: () => <div className="h-64 animate-pulse rounded-xl bg-muted" /> }
+);
+const ModelMixChart = dynamic(
+  () => import("@/components/charts/ModelMixChart").then((m) => ({ default: m.ModelMixChart })),
+  { ssr: false, loading: () => <div className="h-64 animate-pulse rounded-xl bg-muted" /> }
+);
 
 type SpendData = {
   totalSpendUsd: string;

@@ -5,6 +5,7 @@ import { ok, err, fromZodError, unauthorized } from "@/lib/api-response";
 import { createProviderSchema } from "@/lib/validators/providers";
 import { validateProviderKey } from "@/lib/providers/validate-key";
 import { getAuthContext } from "@/lib/auth";
+import { track } from "@/lib/analytics";
 
 export async function GET(): Promise<Response> {
   try {
@@ -92,6 +93,7 @@ export async function POST(req: Request): Promise<Response> {
       },
     });
 
+    track(ctx.userId, { event: "provider_connected", properties: { provider: connection.provider } });
     return ok(connection, 201);
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";

@@ -1,5 +1,12 @@
+import * as Sentry from "@sentry/node";
 import { createServer } from "http";
 import pino from "pino";
+
+Sentry.init({
+  dsn: process.env["SENTRY_DSN"],
+  tracesSampleRate: 0.1,
+  enabled: process.env["NODE_ENV"] === "production",
+});
 import { syncAllProviderConnections } from "./jobs/provider-sync.js";
 import { runAlertCheck } from "./jobs/alert-check.js";
 import { aggregateDirtyCustomers } from "./jobs/aggregate-customers.js";
@@ -33,6 +40,7 @@ healthServer.listen(PORT, () => {
 setInterval(() => {
   aggregateDirtyCustomers(logger).catch((err: unknown) => {
     logger.error({ err }, "Customer aggregation error");
+    Sentry.captureException(err);
   });
 }, 30_000);
 

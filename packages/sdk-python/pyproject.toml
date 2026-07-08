@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tokonomics"
+version = "0.1.0"
+description = "Track AI LLM costs per customer — Tokonomics SDK for Python"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Tokonomics", email = "hello@tokonomics.dev" }]
+keywords = ["llm", "ai", "cost", "tracking", "openai", "anthropic"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "responses"]
+
+[project.urls]
+Homepage = "https://tokonomics.dev"
+Documentation = "https://tokonomics.dev/docs"
+Repository = "https://github.com/tokonomics/tokonomics-sdk"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tokonomics"]
