@@ -1,0 +1,45 @@
+name: Publish SDKs
+
+on:
+  push:
+    tags:
+      - "sdk-node/v*"   # e.g. sdk-node/v0.1.1  → publishes Node SDK to npm
+      - "sdk-python/v*" # e.g. sdk-python/v0.1.1 → publishes Python SDK to PyPI
+
+jobs:
+  publish-node:
+    if: startsWith(github.ref, 'refs/tags/sdk-node/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Build and publish
+        working-directory: packages/sdk-node
+        run: yarn prepublishOnly && npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-python:
+    if: startsWith(github.ref, 'refs/tags/sdk-python/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install build tools
+        run: pip install hatchling build twine
+      - name: Build package
+        working-directory: packages/sdk-python
+        run: python -m build
+      - name: Publish to PyPI
+        working-directory: packages/sdk-python
+        run: twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

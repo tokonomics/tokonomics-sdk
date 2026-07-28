@@ -3,6 +3,7 @@ import { generateOrgApiKey } from "@tokonomics/shared";
 import { z, ZodError } from "zod";
 import { ok, err, fromZodError, unauthorized } from "@/lib/api-response";
 import { getAuthContext } from "@/lib/auth";
+import { track } from "@/lib/analytics";
 
 const createSchema = z.object({ name: z.string().min(1).max(100) });
 
@@ -43,6 +44,7 @@ export async function POST(req: Request): Promise<Response> {
       select: { id: true, name: true, keyPrefix: true, createdAt: true },
     });
 
+    track(ctx.userId, { event: "api_key_created", properties: {} });
     return ok({ ...key, key: fullKey }, 201);
   } catch (e: unknown) {
     return err("INTERNAL_ERROR", e instanceof Error ? e.message : "Unknown error", 500);

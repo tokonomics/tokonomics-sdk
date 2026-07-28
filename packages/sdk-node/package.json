@@ -11,15 +11,23 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": ["dist", "README.md"],
+  "homepage": "https://tokonomics.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tokonomics/tokonomics-sdk.git",
+    "directory": "packages/sdk-node"
+  },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --clean",
     "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "prepublishOnly": "yarn build && yarn typecheck"
   },
-  "keywords": ["llm", "cost", "tracking", "openai", "anthropic", "tokonomics"],
+  "keywords": ["llm", "cost", "tracking", "openai", "anthropic", "tokonomics", "ai", "saas"],
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.14.0",
